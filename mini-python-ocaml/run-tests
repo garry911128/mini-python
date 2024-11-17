@@ -1,0 +1,44 @@
+#!/bin/bash
+
+score=0
+max=0
+
+echo "Positive tests (files in tests/good/)"
+
+for f in tests/good/*.py; do
+    max=`expr $max + 1`;
+    echo $f
+    expected=tests/good/`basename $f .py`.out
+    rm -f out
+    if $1 $f > out; then
+	if cmp --quiet out $expected; then
+	    score=`expr $score + 1`;
+	else
+	    echo "  FAIL: bad output for $f"
+	fi
+    else
+	echo "  FAIL: runtime failure for $f"
+    fi
+done
+echo
+
+echo "Negative tests (files in tests/bad/)"
+
+for f in tests/bad/*.py; do
+    max=`expr $max + 1`;
+    echo $f
+    rm -f out
+    if $1 $f > out 2>&1; then
+	echo "  FAIL: evaluation of $f should fail"
+    else
+        if grep -q "^error:" out; then
+	    score=`expr $score + 1`;
+        else
+            echo "  FAIL: evaluation of $f should print 'error'"
+        fi
+    fi
+done
+
+echo
+percent=`expr 100 \* $score / $max`;
+echo "Score: $score / $max tests ($percent%)"
