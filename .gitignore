@@ -27,3 +27,9 @@ setup.log
 
 # Local OPAM switch
 _opam/
+
+# mini-python exe
+minipython.exe
+
+# output of make tests
+out
