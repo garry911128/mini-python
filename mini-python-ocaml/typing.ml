@@ -57,10 +57,33 @@ let rec type_check_expr env (e: expr) : texpr =
       | None -> error ~loc:id.loc "unbound variable %s" id.id
       end 
   | Ebinop (op, e1, e2) ->
-      print_endline "Expression is a binary operation";
-      let te1 = type_check_expr env e1 in
-      let te2 = type_check_expr env e2 in
-      TEbinop (op, te1, te2)
+    print_endline "Expression is a binary operation";
+    let te1 = type_check_expr env e1 in
+    (* 短路求值 *)
+    begin match op with
+    | Band -> 
+        (* 如果左操作數是布爾且為 false，直接返回 false *)
+        begin match te1 with
+        | TEcst (Cbool false) -> TEcst (Cbool false)
+        | _ ->
+            (* 否則，繼續檢查右操作數 *)
+            let te2 = type_check_expr env e2 in
+            TEbinop (op, te1, te2)
+        end
+    | Bor ->
+        (* 如果左操作數是布爾且為 true，直接返回 true *)
+        begin match te1 with
+        | TEcst (Cbool true) -> TEcst (Cbool true)
+        | _ ->
+            (* 否則，繼續檢查右操作數 *)
+            let te2 = type_check_expr env e2 in
+            TEbinop (op, te1, te2)
+        end
+    | _ ->
+        (* 非邏輯運算符，常規求值 *)
+        let te2 = type_check_expr env e2 in
+        TEbinop (op, te1, te2)
+    end
   | Eunop (op, e) ->
       print_endline "Expression is a unary operation";
       let te = type_check_expr env e in
