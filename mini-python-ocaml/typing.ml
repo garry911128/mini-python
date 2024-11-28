@@ -143,25 +143,25 @@ let rec type_check_stmt env (s: stmt) : tstmt =
 (* 類型檢查函數定義 *)
 let type_check_def env (id, params, body) : tdef =
   print_endline ("Type checking function definition: " ^ id.id);
-  (* 检查参数是否重复 *)
-  let param_names = List.map (fun param -> param.id) params in
-  let duplicates = 
-    List.filter (fun name -> List.length (List.filter ((=) name) param_names) > 1) param_names
-  in
-  if duplicates <> [] then
-    error ~loc:id.loc "function %s has duplicate parameter(s): %s"
-      id.id (String.concat ", " duplicates);
 
-  (* 建立函數記錄 *)
+  (* 創建新的局部環境 *)
+  let local_env = { vars = Hashtbl.create 16; fns = env.fns } in
+  
+  (* 添加參數到局部環境 *)
   let fn_params = List.map (fun param ->
     let var = { v_name = param.id; v_ofs = 0 } in
-    add_var env param.id var;
+    add_var local_env param.id var;
     var
   ) params in
+
+  (* 建立函數記錄 *)
   let fn = { fn_name = id.id; fn_params } in
   add_fn env id.id fn;
-  let tbody = type_check_stmt env body in
+
+  (* 類型檢查函數內的語句 *)
+  let tbody = type_check_stmt local_env body in
   (fn, tbody)
+
   
 
 (* 處理整個文件 *)
