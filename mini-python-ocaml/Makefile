@@ -14,6 +14,7 @@ minipython.exe:
 
 test_typing:
 	@echo "Running tests..."
+	dune clean && dune build
 	cd tests-mini-python && ./test -2 ../minipython.exe
 	cd ..
 

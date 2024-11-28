@@ -140,13 +140,26 @@ let rec type_check_stmt env (s: stmt) : tstmt =
       let te3 = type_check_expr env e3 in
       TSset (te1, te2, te3)
 
+(* 檢查參數是否有重複 *)
+let check_duplicate_params params =
+  let seen = Hashtbl.create 16 in
+  List.iter (fun param ->
+    if Hashtbl.mem seen param.id then
+      error ~loc:param.loc "Duplicate parameter: %s" param.id
+    else
+      Hashtbl.add seen param.id true
+  ) params
+
 (* 類型檢查函數定義 *)
 let type_check_def env (id, params, body) : tdef =
   print_endline ("Type checking function definition: " ^ id.id);
 
+  (* 檢查參數是否重複 *)
+  check_duplicate_params params;
+
   (* 創建新的局部環境 *)
   let local_env = { vars = Hashtbl.create 16; fns = env.fns } in
-  
+
   (* 添加參數到局部環境 *)
   let fn_params = List.map (fun param ->
     let var = { v_name = param.id; v_ofs = 0 } in
