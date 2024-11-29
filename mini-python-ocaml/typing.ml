@@ -31,10 +31,15 @@ type env_t = {
   funcs: fn StringMap.t;
 }
 
+let predefined_funcs = [
+  ("len", {fn_name = "len"; fn_params = [{v_name = "arg"; v_ofs = 0}]});
+  ("range", {fn_name = "range"; fn_params = [{v_name = "start"; v_ofs = 0}; {v_name = "end"; v_ofs = 0}]});
+]
+
 (* defining a value of type env *)
 let empty_env = {
   vars = StringMap.empty;
-  funcs = StringMap.empty;
+  funcs = List.fold_left (fun map (name, fn) -> StringMap.add name fn map) StringMap.empty predefined_funcs;
 }
 
 let add_var (env:env_t) (id:string) (v:var) : env_t =
