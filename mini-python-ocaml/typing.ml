@@ -123,16 +123,37 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
     let te, env = type_expr env e in
     TEunop (op, te), env
   | Ecall (id, args) ->
-    let fn = find_fn env id.id id.loc in
-    let targs, env = List.fold_left (fun (acc, env) arg ->
-      let targ, env = type_expr env arg in
-      targ::acc, env
-    ) ([], env) args in
-    let targs = List.rev targs in
-    if List.length targs <> List.length fn.fn_params then
-      error ~loc:id.loc "function %s expects %d arguments but got %d" id.id (List.length fn.fn_params) (List.length targs)
-    else
-    TEcall (fn, targs), env
+    begin match id.id, args with
+      | "len", e ->
+        let tes, env = List.fold_left (fun (acc, env) e ->
+          let te, env = type_expr env e in
+          te::acc, env
+        ) ([], env) e in
+        if List.length tes <> 1 then
+          error ~loc:id.loc "function len expects 1 argument but got %d" (List.length tes)
+        else
+          TEcall ({fn_name = "len"; fn_params = []}, tes), env
+      | "range", e ->
+        let tes, env = List.fold_left (fun (acc, env) e ->
+          let te, env = type_expr env e in
+          te::acc, env
+        ) ([], env) e in
+        if List.length tes <> 1 then
+          error ~loc:id.loc "function range expects 1 argument but got %d" (List.length tes)
+        else
+          TEcall ({fn_name = "range"; fn_params = []}, tes), env
+      | _, _ ->
+        let fn = find_fn env id.id id.loc in
+        let targs, env = List.fold_left (fun (acc, env) arg ->
+          let targ, env = type_expr env arg in
+          targ::acc, env
+        ) ([], env) args in
+        let targs = List.rev targs in
+        if List.length targs <> List.length fn.fn_params then
+          error ~loc:id.loc "function %s expects %d arguments but got %d" id.id (List.length fn.fn_params) (List.length targs)
+        else
+        TEcall (fn, targs), env
+    end
   | Elist l ->
     List.fold_left (fun (acc, env) e ->
       let te, env = type_expr env e in
