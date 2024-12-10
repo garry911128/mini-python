@@ -24,13 +24,11 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	subq $32, %rsp
-#Beq
 	movq $8, %rdi
 	call malloc_wrapper
 	movq $5, 0(%rax)
 	movq %rax, -8(%rbp)
 	movq 0(%rax), %rdi
-#push for first value
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
@@ -41,24 +39,20 @@ main:
 	cmpq %rsi, %rdi
 	sete %dil
 	movzbq %dil, %rdi
-#push for result
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
 	popq %rdi
 	movq %rdi, 0(%rax)
-#Beq end
 #print
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
 	call printf_wrapper
-#Beq
 	movq $8, %rdi
 	call malloc_wrapper
 	movq $5, 0(%rax)
 	movq %rax, -24(%rbp)
 	movq 0(%rax), %rdi
-#push for first value
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
@@ -69,13 +63,11 @@ main:
 	cmpq %rsi, %rdi
 	sete %dil
 	movzbq %dil, %rdi
-#push for result
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
 	popq %rdi
 	movq %rdi, 0(%rax)
-#Beq end
 #print
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi

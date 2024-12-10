@@ -20,7 +20,7 @@ let empty_env = {
   stack_offset = 0;
   string_counter = 0;
 }
-
+let byte = 8
 let unique_string_label (env:env_t) (s:string) : X86_64.data =
   let n = env.string_counter in
   env.string_counter <- n + 1;
@@ -30,22 +30,22 @@ let unique_string_label (env:env_t) (s:string) : X86_64.data =
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * int =
   match c with
   | Cnone ->
-    env.stack_offset <- env.stack_offset + 8;
-    movq (imm 8) (reg rdi) ++
+    env.stack_offset <- env.stack_offset + byte;
+    movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
     movq (imm 0) (ind rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
     , nop, 0
   | Cbool b ->
-    env.stack_offset <- env.stack_offset + 8;
-    movq (imm 8) (reg rdi) ++
+    env.stack_offset <- env.stack_offset + byte;
+    movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
     movq (imm (if b then 1 else 0)) (ind rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
     , nop, 1
   | Cint i ->
-    env.stack_offset <- env.stack_offset + 8;
-    movq (imm 8) (reg rdi) ++
+    env.stack_offset <- env.stack_offset + byte;
+    movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
     movq (imm64 i) (ind ~ofs:(0) rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
@@ -87,7 +87,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         movq (ind rax) (reg rsi) ++
         addq (reg rsi) (reg rdi) ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax),
@@ -106,7 +106,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         movq (ind rax) (reg rsi) ++
         subq (reg rsi) (reg rdi) ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax), 
@@ -125,7 +125,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         movq (ind rax) (reg rsi) ++
         imulq (reg rsi) (reg rdi) ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax), 
@@ -148,7 +148,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         idivq (reg rbx) ++
         movq (reg rax) (reg rdi) ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax), 
@@ -171,7 +171,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         idivq (reg rbx) ++
         movq (reg rdx) (reg rdi) ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax), 
@@ -192,7 +192,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         sete (reg dil) ++
         movzbq (reg dil) rdi ++
         pushq (reg rdi) ++
-        movq (imm 8) (reg rdi) ++
+        movq (imm byte) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
         movq (reg rdi) (ind rax), 
