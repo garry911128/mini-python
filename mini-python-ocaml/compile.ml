@@ -7,8 +7,10 @@ let debug = ref false
 
 module StringMap = Map.Make(String)
 
+type ty = [ `none | `int | `bool | `string | `list ]
+
 type env_t = {
-  mutable vars: (var * int * int) StringMap.t;
+  mutable vars: (var * int * ty) StringMap.t;
   funcs: fn StringMap.t;
   mutable stack_offset: int;
   mutable string_counter: int;
@@ -27,7 +29,7 @@ let unique_string_label (env:env_t) (s:string) : X86_64.data =
   label (Printf.sprintf "str%d" n)
 
 (* const is always stored at the address rax is pointing to *)
-let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * int =
+let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
   match c with
   | Cnone ->
     env.stack_offset <- env.stack_offset + byte;
@@ -35,39 +37,56 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * i
     call "malloc_wrapper" ++
     movq (imm 0) (ind rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
-    , nop, 0
+    , nop, `none
   | Cbool b ->
     env.stack_offset <- env.stack_offset + byte;
     movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
     movq (imm (if b then 1 else 0)) (ind rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
-    , nop, 1
+    , nop, `bool
   | Cint i ->
     env.stack_offset <- env.stack_offset + byte;
     movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
     movq (imm64 i) (ind ~ofs:(0) rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
-    , nop, 2
+    , nop, `int
   | Cstring s ->
     leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax,
-    unique_string_label env s ++ string s, 3
+    unique_string_label env s ++ string s, `string
 
-let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * int =
+let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
   if StringMap.mem v.v_name env.vars then
     begin
       let var, ofs, var_type = StringMap.find v.v_name env.vars in
       (* for now, only return the type *)
-      if var_type = 2 then
-        nop, nop, var_type
-      else
-        failwith "Unsupported var type"
+      begin match var_type with
+      | `int ->
+        nop, nop, `int
+        | _ ->
+        nop, nop, `none
+      end
     end
   else
     failwith "Variable not found"
 
-let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * int =
+let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instruction:X86_64.text) : X86_64.text =
+  code1 ++
+  movq (ind rax) (reg rdi) ++
+  pushq (reg rdi) ++
+  code2 ++
+  popq rdi ++
+  movq (ind rax) (reg rsi) ++
+  instruction ++
+  pushq (reg rdi) ++
+  movq (imm byte) (reg rdi) ++
+  call "malloc_wrapper" ++
+  popq rdi ++
+  movq (reg rdi) (ind rax)
+
+  
+let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * ty =
   match expr with
   | TEcst c ->
     compile_const env c
@@ -75,146 +94,96 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     compile_var env v
   | TEbinop (op, e1, e2) ->
     begin match op with
-    | Badd ->
+    | Band | Bor ->
+      failwith "Unsupported Band/Bor"
+    | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        addq (reg rsi) (reg rdi) ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax),
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Badd"
-    | Bsub ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        subq (reg rsi) (reg rdi) ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax), 
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Bsub"
-    | Bmul ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        imulq (reg rsi) (reg rdi) ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax), 
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Bmul"
-    | Bdiv ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        movq (reg rdi) (reg rax) ++
-        cqto ++
-        movq (reg rsi) (reg rbx) ++
-        idivq (reg rbx) ++
-        movq (reg rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax), 
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Bdiv"
-    | Bmod ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        movq (reg rdi) (reg rax) ++
-        cqto ++
-        movq (reg rsi) (reg rbx) ++
-        idivq (reg rbx) ++
-        movq (reg rdx) (reg rdi) ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax), 
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Bmod"
-    | Beq ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      if expr_type1 = 2 && expr_type2 = 2 then
-        text_code1 ++
-        movq (ind rax) (reg rdi) ++
-        pushq (reg rdi) ++
-        text_code2 ++
-        popq rdi ++
-        movq (ind rax) (reg rsi) ++
-        cmpq (reg rsi) (reg rdi) ++
-        sete (reg dil) ++
-        movzbq (reg dil) rdi ++
-        pushq (reg rdi) ++
-        movq (imm byte) (reg rdi) ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (reg rdi) (ind rax), 
-        data_code1 ++ data_code2, 2
-      else
-        failwith "Unsupported Beq"
-    | Bneq ->
-      failwith "Unsupported Bneq"
-    | Blt ->
-      failwith "Unsupported Blt"
-    | Ble ->
-      failwith "Unsupported Ble"
-    | Bgt ->
-      failwith "Unsupported Bgt"
-    | Bge ->
-      failwith "Unsupported Bge"
-    | Band ->
-      failwith "Unsupported Band"
-    | Bor ->
-      failwith "Unsupported Bor"
+      begin match op, expr_type1, expr_type2 with
+      | Badd, `int, `int ->
+        arith_asm text_code1 text_code2 (addq (reg rsi) (reg rdi)),
+        data_code1 ++ data_code2, `int
+      | Bsub, `int, `int ->
+        arith_asm text_code1 text_code2 (subq (reg rsi) (reg rdi)),
+        data_code1 ++ data_code2, `int
+      | Bmul, `int, `int ->
+        arith_asm text_code1 text_code2 (imulq (reg rsi) (reg rdi)),
+        data_code1 ++ data_code2, `int
+      | Bdiv, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          movq (reg rdi) (reg rax) ++
+          cqto ++
+          movq (reg rsi) (reg rbx) ++
+          idivq (reg rbx) ++
+          movq (reg rax) (reg rdi)
+        ),
+        data_code1 ++ data_code2, `int
+      | Bmod, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          movq (reg rdi) (reg rax) ++
+          cqto ++
+          movq (reg rsi) (reg rbx) ++
+          idivq (reg rbx) ++
+          movq (reg rdx) (reg rdi)
+        ),
+        data_code1 ++ data_code2, `int
+      | Beq, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          sete (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | Bneq, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          setne (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | Blt, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          setl (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | Ble, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          setle (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | Bgt, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          setg (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | Bge, `int, `int ->
+        arith_asm text_code1 text_code2
+        (
+          cmpq (reg rsi) (reg rdi) ++
+          setge (reg dil) ++
+          movzbq (reg dil) rdi
+        ),
+        data_code1 ++ data_code2, `bool
+      | _ ->
+        failwith "dont care"
+      end
     end
-  | TEunop (op, e) ->
+  | _ ->
+    failwith "dont care"
+  (* | TEunop (op, e) ->
     failwith "Unsupported TEunop"
   | TEcall (fn, args) ->
     failwith "Unsupported TEcall"
@@ -223,7 +192,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
-    failwith "Unsupported TEget"
+    failwith "Unsupported TEget" *)
 
 let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
