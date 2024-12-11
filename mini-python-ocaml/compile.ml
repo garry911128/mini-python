@@ -23,10 +23,11 @@ let empty_env = {
   string_counter = 0;
 }
 let byte = 8
-let unique_string_label (env:env_t) (s:string) : X86_64.data =
+let unique_string_label (env:env_t) (s:label) : X86_64.data * label =
   let n = env.string_counter in
   env.string_counter <- n + 1;
-  label (Printf.sprintf "str%d" n)
+  label (Printf.sprintf "str%d" n) ++ string s
+  , "str" ^ (string_of_int n)
 
 (* const is always stored at the address rax is pointing to *)
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
@@ -53,8 +54,13 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * t
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
     , nop, `int
   | Cstring s ->
-    leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax,
-    unique_string_label env s ++ string s, `string
+    let data_code, label = unique_string_label env s in
+    env.stack_offset <- env.stack_offset + 8;
+    movq (imm 8) (reg rdi) ++
+    call "malloc_wrapper" ++
+    movabsq (ilab label) rax ++
+    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    ,data_code , `string
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
   if StringMap.mem v.v_name env.vars then
@@ -64,7 +70,11 @@ let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
       begin match var_type with
       | `int ->
         nop, nop, `int
-        | _ ->
+      | `bool ->
+        nop, nop, `bool
+      | `string ->
+        nop, nop, `string
+      | _ ->
         nop, nop, `none
       end
     end
@@ -207,13 +217,31 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     text_code, data_code
   | TSprint expr ->
     let text_code, data_code, expr_type = compile_expr env expr in
-    (* format string required *)
-    comment "print" ++
-    text_code ++
-    movq (ind rax) (reg rsi) ++
-    leaq (lab "print_int") rdi ++
-    call "printf_wrapper",
-    data_code
+    begin match expr_type with
+    | `int ->
+      comment "print_int" ++
+      text_code ++
+      movq (ind rax) (reg rsi) ++
+      leaq (lab "print_int") rdi ++
+      call "printf_wrapper",
+      data_code
+    | `string ->
+      comment "print_str" ++
+      text_code ++
+      movq (reg rax) (reg rsi) ++
+      leaq (lab "print_str") rdi ++
+      call "printf_wrapper",
+      data_code
+    | `bool ->
+      comment "print_int" ++
+      text_code ++
+      movq (ind rax) (reg rsi) ++
+      leaq (lab "print_int") rdi ++
+      call "printf_wrapper",
+      data_code
+    | _ ->
+      failwith "Unsupported print"
+    end
   | TSblock stmts ->
     List.fold_left (fun (acc_text, acc_data) stmt ->
       let text_code, data_code = compile_stmt env stmt in
@@ -284,6 +312,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
     data = 
       data_code ++
       label "print_int" ++
-      string "%d\n"
+      string "%d\n" ++
+      label "print_str" ++
+      string "%s\n"
       (* hard-coded print_int *)
   }
