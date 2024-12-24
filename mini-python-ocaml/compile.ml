@@ -256,10 +256,24 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       data_code
     end
   | TEcall (fn, args) ->
-    if fn.fn_name = "len" then
-      failwith "TypeError: len() takes exactly one argument"
-    else
+    begin match fn.fn_name with
+    | "len" ->
+      if List.length args = 1 then
+        let text_code, data_code = compile_expr env parent_env (List.hd args) in
+        text_code ++
+        func_len
+        , data_code
+      else failwith "len function takes exactly one argument"
+    | "list" ->
+      if List.length args = 1 then
+        let text_code, data_code = compile_expr env parent_env (List.hd args) in
+        text_code ++
+        func_list env
+        , data_code
+      else failwith "list function takes exactly one argument"
+    | _ ->
       failwith "Unsupported function call"
+    end
   | TElist l ->
     let len = List.length l in
     List.fold_left (fun (text_acc, data_acc, counter) i ->
@@ -278,7 +292,16 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
     movq (imm len) (ind ~ofs:(byte) rax) ++ (* length *)
     text_code, data_code
   | TErange e ->
-    failwith "Unsupported TErange"
+    let text_code, data_code = compile_expr env parent_env e in
+    text_code ++
+    movq (ind rax) !%r10++
+    cmpq (imm 2) !%r10 ++
+    jne "runtime_error" ++
+    movq (ind ~ofs:(byte) rax) !%r10 ++
+    movq (imm (2 * byte)) !%rdi ++
+    call "malloc_wrapper" ++
+    movq (imm 5) (ind rax) ++
+    movq !%r10 (ind ~ofs:(byte) rax), data_code
   | TEget (e1, e2) ->
     failwith "Unsupported TEget"
 

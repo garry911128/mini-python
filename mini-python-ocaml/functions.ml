@@ -93,6 +93,8 @@ let func_print_value (env:env_t): X86_64.text =
   let print_int = unique_label env "print_int" in
   let print_string = unique_label env "print_string" in
   let print_string_end = unique_label env "print_string_end" in
+  let print_string_in_list = unique_label env "print_string_in_list" in
+  let print_string_in_list_2 = unique_label env "print_string_in_list_2" in
   let print_list = unique_label env "print_list" in
   let print_list_end = unique_label env "print_list_end" in
   let print_list_first_time = unique_label env "print_list_first_time" in
@@ -111,6 +113,8 @@ let func_print_value (env:env_t): X86_64.text =
   je print_string ++
   cmpq (imm 4) !%r10 ++
   jne "runtime_error" ++
+  movq (imm 1) !%r11 ++
+  
   movq (ind ~ofs:(byte) rdi) !%rcx ++
   addq (imm (2 * byte)) !%rdi ++
   movq !%rdi !%rsi ++
@@ -165,6 +169,12 @@ let func_print_value (env:env_t): X86_64.text =
   jmp print_value_end ++
 
   label print_string ++
+  cmpq (imm 1) !%r11 ++
+  jne print_string_in_list ++
+  func_print_list_save_reg ++
+  put_character '\'' ++
+  func_print_list_restore_reg ++
+  label print_string_in_list ++
   movq !%rdi !%rax ++
   movq (ind ~ofs:(byte) rax) !%rdi ++
   testq !%rdi !%rdi ++
@@ -179,6 +189,12 @@ let func_print_value (env:env_t): X86_64.text =
   call "printf_wrapper" ++
   (* put_character '"' ++ *)
   label print_string_end ++
+  cmpq (imm 1) !%r11 ++
+  jne print_string_in_list_2 ++
+  func_print_list_save_reg ++
+  put_character '\'' ++
+  func_print_list_restore_reg ++
+  label print_string_in_list_2 ++
   jmp print_value_end ++
 
   label print_list_end ++
@@ -515,3 +531,73 @@ let func_list_concat (env:env_t): X86_64.text =
   label func_list_concat_end ++
   leave ++
   ret
+
+
+let func_len : X86_64.text =
+  movq (ind rax) !%r10 ++
+  cmpq (imm 2) !%r10 ++
+  jle "runtime_error" ++
+  movq (ind ~ofs:(byte) rax) !%r8 ++
+  movq (imm (2 * byte)) !%rdi ++
+  call "malloc_wrapper" ++
+  movq (imm 2) (ind rax) ++
+  movq !%r8 (ind ~ofs:(byte) rax)
+
+let func_list_save_reg : X86_64.text =
+  pushq !%r8 ++
+  pushq !%rsi ++
+  pushq !%rcx ++
+  pushq !%rax
+
+let func_list_restore_reg : X86_64.text =
+  popq rax ++
+  popq rcx ++
+  popq rsi ++
+  popq r8
+
+let func_list env : X86_64.text =
+  let loop = unique_label env "loop" in
+  let end_label = unique_label env "end_label" in
+  comment "aaaalist" ++
+  movq (ind rax) !%r10 ++
+  cmpq (imm 5) !%r10 ++
+  jne "runtime_error" ++
+  movq (ind ~ofs:(byte) rax) !%rsi ++
+  (*
+  rsi: the value
+  rcx: counter
+  r8: current address
+  rcx = rsi 
+  rax: the address of the list
+  *)
+  movq !%rsi !%rdi ++
+  
+  addq (imm 2) !%rdi ++
+  imulq (imm byte) !%rdi ++
+  pushq !%rax ++
+  pushq !%rsi ++
+
+  call "malloc_wrapper" ++
+  popq rsi ++
+  popq rax ++
+  movq (imm 4) (ind rax) ++
+  movq !%rsi (ind ~ofs:(byte) rax) ++
+  movq !%rax !%r8 ++
+  addq (imm (2 * byte)) !%r8 ++
+  xorq !%rcx !%rcx ++
+  
+  label loop ++
+  cmpq !%rcx !%rsi ++
+  je end_label ++
+  movq (imm (2*byte)) !%rdi ++
+  func_list_save_reg ++
+  call "malloc_wrapper" ++
+  movq !%rax !%r10 ++
+  func_list_restore_reg ++
+  movq (imm 2) (ind r10) ++
+  movq !%rcx (ind ~ofs:(byte) r10) ++
+  movq !%r10 (ind r8) ++
+  incq !%rcx ++
+  addq (imm byte) !%r8 ++
+  jmp loop ++
+  label end_label
