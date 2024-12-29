@@ -144,7 +144,8 @@
 
 l = [1,2,3]
 for x in l:
-    # l = []
+    l = []
     print(x)
-    a = 1
-# print(a)
+    a = 12
+print(l)
+print(a)

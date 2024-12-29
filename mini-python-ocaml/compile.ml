@@ -399,12 +399,20 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
   | TSassign (var, expr) ->
-    env.stack_offset <- env.stack_offset - byte;
-    let text_code, data_code = compile_expr env parent_env expr in
-    env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
-    text_code ++
-    movq !%rax (ind ~ofs:(env.stack_offset) rbp)
-    , data_code
+    begin try
+      let var, ofs = StringMap.find var.v_name env.vars in
+      let text_code, data_code = compile_expr env parent_env expr in
+      text_code ++
+      movq !%rax (ind ~ofs:ofs rbp),
+      data_code
+    with Not_found ->
+      env.stack_offset <- env.stack_offset - byte;
+      let text_code, data_code = compile_expr env parent_env expr in
+      env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
+      text_code ++
+      movq !%rax (ind ~ofs:env.stack_offset rbp)
+      , data_code
+    end
   | TSprint expr ->
     let text_code, data_code = compile_expr env parent_env expr in
     text_code ++
@@ -472,18 +480,19 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
     with Not_found ->
       env.stack_offset <- env.stack_offset - byte;
       env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
+      let item_ofs = env.stack_offset in
       let body_text_code, body_data_code = compile_stmt env parent_env body in
       let loop_label = unique_label env "loop" in
       let end_label = unique_label env "end" in
       let do_jump = unique_label env "do_jump" in 
-      comment "for loop" ++
+      comment "for loop not found" ++
       expr_text_code ++
       movq !%rax !%rdi ++
       movq (ind ~ofs:byte rax) !%rcx ++
       addq (imm (2 * byte)) !%rdi ++
       movq !%rdi !%rsi ++
       movq (ind rdi) !%r10 ++
-      movq !%r10 (ind ~ofs:(env.stack_offset) rbp) ++
+      movq !%r10 (ind ~ofs:(item_ofs) rbp) ++
       jmp do_jump ++
 
       label loop_label ++
@@ -491,7 +500,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
 	    jz end_label ++
       addq (imm byte) !%rsi ++
       movq (ind rsi) !%r10 ++
-      movq !%r10 (ind ~ofs:(env.stack_offset) rbp) ++
+      movq !%r10 (ind ~ofs:(item_ofs) rbp) ++
       
       label do_jump ++
       testq !%rcx !%rcx ++
