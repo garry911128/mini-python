@@ -100,3 +100,83 @@ let bool_builder i =
   call "malloc_wrapper" ++
   movq (imm 1) (ind rax) ++
   movq (imm i) (ind ~ofs:byte rax)
+
+let difference env fn_label instructions =
+  let func_diff_ty_eq = unique_label env "func_diff_ty_eq" in
+  let func_diff_value_bool_int = unique_label env "func_eq_value_bool_int" in
+  let func_diff_value_string = unique_label env "func_eq_value_string" in
+  let func_diff_value_list_loop = unique_label env "func_eq_value_list_loop" in
+  let func_diff_value_list_end = unique_label env "func_eq_value_list_end" in
+  let func_diff_value_end = unique_label env "func_eq_value_end" in
+  let counter_guard = unique_label env "func_counter" in
+  label fn_label ++
+  pushq !%rbp ++
+  movq !%rsp !%rbp ++
+  movq (ind rdi) !%r10 ++
+  movq (ind rsi) !%r11 ++
+  cmpq !%r10 !%r11 ++
+  je func_diff_ty_eq ++
+  instructions ++
+  label func_diff_ty_eq ++
+  cmpq (imm 0) !%r10 ++
+  je "runtime_error" ++
+  cmpq (imm 2) !%r10 ++
+  jle func_diff_value_bool_int ++
+  cmpq (imm 3) !%r10 ++
+  je func_diff_value_string ++
+  cmpq (imm 4) !%r10 ++
+  jne "runtime_error" ++
+  movq (ind ~ofs:(byte) rdi) !%rcx ++
+  movq (ind ~ofs:(byte) rsi) !%r10 ++
+  cmpq !%r10 !%rcx ++
+  jl counter_guard ++
+  movq !%r10 !%rcx++
+  label counter_guard ++
+  movq !%rdi !%r8 ++
+  addq (imm (2*byte)) !%r8 ++
+  movq !%rsi !%r9 ++
+  addq (imm (2*byte)) !%r9 ++
+
+  label func_diff_value_list_loop ++
+  testq !%rcx !%rcx ++
+  jz func_diff_value_list_end ++
+  pushq !%rdi ++
+  pushq !%rsi ++
+  movq (ind r8) !%rdi ++
+  movq (ind r9) !%rsi ++
+  pushq !%rcx ++
+  pushq !%r8 ++
+  pushq !%r9 ++
+  call fn_label ++
+  popq r9 ++
+  popq r8 ++
+  popq rcx ++
+  popq rsi ++
+  popq rdi ++
+  cmpq (imm 0) !%rax ++
+  jne func_diff_value_end ++
+  decq !%rcx ++
+  addq (imm (byte)) !%r8 ++
+  addq (imm (byte)) !%r9 ++
+  jmp func_diff_value_list_loop ++
+
+  label func_diff_value_bool_int ++
+  movq (ind ~ofs:byte rdi) !%rax ++
+  movq (ind ~ofs:byte rsi) !%r9 ++
+  subq !%r9 !%rax ++
+  jmp func_diff_value_end ++
+
+  label func_diff_value_string ++
+  movq (ind ~ofs:(2 * byte) rdi) !%rdi ++
+  movq (ind ~ofs:(2 * byte) rsi) !%rsi ++
+  call "strcmp_wrapper" ++
+  jmp func_diff_value_end ++
+
+  label func_diff_value_list_end ++
+  movq (ind ~ofs:byte rdi) !%rax ++
+  movq (ind ~ofs:byte rsi) !%r9 ++
+  subq !%r9 !%rax ++
+
+  label func_diff_value_end ++
+  leave ++
+  ret

@@ -175,21 +175,13 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Beq ->
         let beq = unique_label env "beq_false" in
         let beq_end = unique_label env "beq_end" in
-        let type_eq  = unique_label env "type_eq" in
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++ (* rdi type to rdx *)
-        movq (ind rsi) !%rcx ++ (* rsi type to rcx *)
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        bool_builder 0 ++
-        jmp beq_end ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_eq" ++
         cmpq (imm 0) !%rax ++
         jne beq ++
         bool_builder 1 ++
@@ -201,21 +193,13 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Bneq ->
         let beq = unique_label env "beq_false" in
         let beq_end = unique_label env "beq_end" in
-        let type_eq  = unique_label env "type_eq" in
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++ (*rdi type to rdx*)
-        movq (ind rsi) !%rcx ++(*rsi type to rcx *)
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        bool_builder 1 ++
-        jmp beq_end ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_neq" ++
         cmpq (imm 0) !%rax ++
         je beq ++
         bool_builder 1 ++
@@ -227,20 +211,13 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Blt ->
         let blt = unique_label env "blt_false" in
         let blt_end = unique_label env "blt_end" in
-        let type_eq  = unique_label env "type_eq" in
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++
-        movq (ind rsi) !%rcx ++
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        call "runtime_error" ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_💤" ++
         cmpl (imm 0) !%eax ++
         jge blt ++
         bool_builder 1 ++
@@ -252,20 +229,13 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Ble ->
         let ble = unique_label env "ble_false" in
         let ble_end = unique_label env "ble_end" in
-        let type_eq  = unique_label env "type_eq" in
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++
-        movq (ind rsi) !%rcx ++
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        call "runtime_error" ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_💤" ++
         cmpl (imm 0) !%eax ++
         jg ble ++
         bool_builder 1 ++
@@ -277,20 +247,14 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Bgt ->
         let bgt = unique_label env "bgt_false" in
         let bgt_end = unique_label env "bgt_end" in
-        let type_eq  = unique_label env "type_eq" in
+        
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++
-        movq (ind rsi) !%rcx ++
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        call "runtime_error" ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_💤" ++
         cmpl (imm 0) !%eax ++
         jle bgt ++
         bool_builder 1 ++
@@ -302,20 +266,14 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       | Bge ->
         let bge = unique_label env "bge_false" in
         let bge_end = unique_label env "bge_end" in
-        let type_eq  = unique_label env "type_eq" in
+        
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        movq (ind rdi) !%rdx ++
-        movq (ind rsi) !%rcx ++
-        cmpq !%rdx !%rcx ++
-        je type_eq ++
-        call "runtime_error" ++
-        label type_eq ++
-        call "difference" ++
+        call "func_difference_💤" ++
         cmpl (imm 0) !%eax ++
         jl bge ++
         bool_builder 1 ++
@@ -417,7 +375,9 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
     text_code2 ++
     popq rdi ++
     movq !%rax !%rsi ++
-    call "func_list_get", data_code1 ++ data_code2
+    call "func_list_get"++
+    movq (ind rax) !%rax
+    , data_code1 ++ data_code2
 
 let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
@@ -428,7 +388,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
     let else_label = unique_label env "else" in
     let end_label = unique_label env "end" in
     text_code_cond ++
-    cmpq (imm 0) (ind rax) ++
+    cmpq (imm 0) (ind ~ofs:byte rax) ++
     je else_label ++
     text_code_s1 ++
     jmp end_label ++
@@ -476,6 +436,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       let do_jump = unique_label env "do_jump" in 
       comment "for loop" ++
       expr_text_code ++
+      
       movq !%rax !%rdi ++
       movq (ind ~ofs:byte rax) !%rcx ++
       addq (imm (2 * byte)) !%rdi ++
@@ -551,9 +512,27 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       ,expr_data_code ++ body_data_code
     end;
   | TSeval expr ->
-    failwith "Unsupported TSeval"
+    let text_code, data_code = compile_expr env parent_env expr in
+    text_code, data_code
   | TSset (e1, e2, e3) ->
-    failwith "Unsupported TSset"
+    let text_code1, data_code1 = compile_expr env parent_env e1 in
+    let text_code2, data_code2 = compile_expr env parent_env e2 in
+    let text_code3, data_code3 = compile_expr env parent_env e3 in
+    text_code1 ++
+    movq !%rax !%rdi ++
+    pushq !%rdi ++
+    text_code2 ++
+    popq rdi ++
+    movq !%rax !%rsi ++
+    call "func_list_get" ++
+    movq !%rax !%rdi ++
+    pushq !%rdi ++
+    text_code3 ++
+    comment "set" ++
+    popq rdi ++
+    movq !%rax (ind rdi)
+    , data_code1 ++ data_code2
+
 
 let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
   let env_global = {

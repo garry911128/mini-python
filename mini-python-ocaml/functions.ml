@@ -77,13 +77,9 @@ let func env : X86_64.text * X86_64.data =
   let func_list_loop = "func_list_loop" in
   let func_list_end = "func_list_end" in
   let runtime_error = "runtime_error" in
-
-  let func_eq_value_bool_int = unique_label env "func_eq_value_bool_int" in
-  let func_eq_value_string = unique_label env "func_eq_value_string" in
-  let func_eq_value_list_loop = unique_label env "func_eq_value_list_loop" in
-  let func_eq_value_list_end = unique_label env "func_eq_value_list_end" in
-  let func_eq_value_end = unique_label env "func_eq_value_end" in
-  let counter_guard = unique_label env "func_counter" in
+  let func_difference_eq = "func_difference_eq" in
+  let func_difference_neq = "func_difference_neq" in
+  let func_difference_failure = "func_difference_💤" in
 
   let func_list_get = "func_list_get" in
 
@@ -432,73 +428,6 @@ let func env : X86_64.text * X86_64.data =
     label func_list_end ++
     ret ++
 
-    label "difference" ++
-    pushq !%rbp ++
-    movq !%rsp !%rbp ++
-    movq (ind rdi) !%r10 ++
-    cmpq (imm 0) !%r10 ++
-    je "runtime_error" ++
-    cmpq (imm 2) !%r10 ++
-    jle func_eq_value_bool_int ++
-    cmpq (imm 3) !%r10 ++
-    je func_eq_value_string ++
-    cmpq (imm 4) !%r10 ++
-    jne "runtime_error" ++
-    movq (ind ~ofs:(byte) rdi) !%rcx ++
-    movq (ind ~ofs:(byte) rsi) !%r10 ++
-    cmpq !%r10 !%rcx ++
-    jl counter_guard ++
-    movq !%r10 !%rcx++
-    label counter_guard ++
-    movq !%rdi !%r8 ++
-    addq (imm (2*byte)) !%r8 ++
-    movq !%rsi !%r9 ++
-    addq (imm (2*byte)) !%r9 ++
-
-    label func_eq_value_list_loop ++
-    testq !%rcx !%rcx ++
-    jz func_eq_value_list_end ++
-    pushq !%rdi ++
-    pushq !%rsi ++
-    movq (ind r8) !%rdi ++
-    movq (ind r9) !%rsi ++
-    pushq !%rcx ++
-    pushq !%r8 ++
-    pushq !%r9 ++
-    call "difference" ++
-    popq r9 ++
-    popq r8 ++
-    popq rcx ++
-    popq rsi ++
-    popq rdi ++
-    cmpq (imm 0) !%rax ++
-    jne func_eq_value_end ++
-    decq !%rcx ++
-    addq (imm (byte)) !%r8 ++
-    addq (imm (byte)) !%r9 ++
-    jmp func_eq_value_list_loop ++
-
-    label func_eq_value_bool_int ++
-    movq (ind ~ofs:byte rdi) !%rax ++
-    movq (ind ~ofs:byte rsi) !%r9 ++
-    subq !%r9 !%rax ++
-    jmp func_eq_value_end ++
-
-    label func_eq_value_string ++
-    movq (ind ~ofs:(2 * byte) rdi) !%rdi ++
-    movq (ind ~ofs:(2 * byte) rsi) !%rsi ++
-    call "strcmp_wrapper" ++
-    jmp func_eq_value_end ++
-
-    label func_eq_value_list_end ++
-    movq (ind ~ofs:byte rdi) !%rax ++
-    movq (ind ~ofs:byte rsi) !%r9 ++
-    subq !%r9 !%rax ++
-
-    label func_eq_value_end ++
-    leave ++
-    ret ++
-
     label func_list_get ++
     movq (ind rdi) !%r10 ++
     cmpq (imm 4) !%r10 ++
@@ -513,8 +442,20 @@ let func env : X86_64.text * X86_64.data =
     addq (imm 2) !%r8 ++
     imulq (imm byte) !%r8 ++
     addq !%r8 !%rdi ++
-    movq (ind rdi) !%rax ++
+    movq !%rdi !%rax ++
     ret ++
+
+    difference env func_difference_eq (
+      movq (imm 1) !%rax ++
+      leave ++
+      ret
+    ) ++
+    difference env func_difference_neq (
+      movq (imm 1) !%rax ++
+      leave ++
+      ret  
+    ) ++
+    difference env func_difference_failure (jmp "runtime_error") ++
     
     label runtime_error ++
     leaq (lab "emit_runtime_error_msg") rdi ++
