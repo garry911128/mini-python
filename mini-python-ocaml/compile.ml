@@ -408,7 +408,16 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
     movq (imm 5) (ind rax) ++
     movq !%r10 (ind ~ofs:(byte) rax), data_code
   | TEget (e1, e2) ->
-    failwith "Unsupported TEget"
+    let text_code1, data_code1 = compile_expr env parent_env e1 in
+    let text_code2, data_code2 = compile_expr env parent_env e2 in
+
+    text_code1 ++
+    movq !%rax !%rdi ++
+    pushq !%rdi ++
+    text_code2 ++
+    popq rdi ++
+    movq !%rax !%rsi ++
+    call "func_list_get", data_code1 ++ data_code2
 
 let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with

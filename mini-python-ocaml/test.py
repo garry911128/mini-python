@@ -23,8 +23,8 @@
 # g = [[2, not g_arg, 4]]
 # print(g)
 # hh = 2
-# i = [1,[2,["hrt",[True,[-5]]]]]
-# print(i)
+i = [1,[2,["hrt",[True,[-5]]]]]
+print(i[1][0])
 # print(i+i)
 # # # # print(1 < 2 and len(1))
 
@@ -59,17 +59,17 @@
 # print(1==1)
 # print(1==2)
 
-print(True == True)
-print(False == False)
-print([1,4] == [1,1,4])
-print("a" == "a")
-print("a" == "b")
+# print(True == True)
+# print(False == False)
+# print([1,4] == [1,1,4])
+# print("a" == "a")
+# print("a" == "b")
 
-print("a" != "A")
-print("a" != "aa")
-print("a" != "ab")
-print("a" != None)
-print("a" != "a")
+# print("a" != "A")
+# print("a" != "aa")
+# print("a" != "ab")
+# print("a" != None)
+# print("a" != "a")
 
 # print(1<2)
 # print(3<1)
@@ -111,3 +111,4 @@ print("a" != "a")
 # print([1,1,2]>=[3])
 # print([1]>=[1,1,2])
 # print([1,1,2]>=[1,1,2])
+

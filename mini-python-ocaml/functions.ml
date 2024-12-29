@@ -85,6 +85,8 @@ let func env : X86_64.text * X86_64.data =
   let func_eq_value_end = unique_label env "func_eq_value_end" in
   let counter_guard = unique_label env "func_counter" in
 
+  let func_list_get = "func_list_get" in
+
   let text =
     label "print_value" ++
     pushq !%rbp ++
@@ -495,6 +497,23 @@ let func env : X86_64.text * X86_64.data =
 
     label func_eq_value_end ++
     leave ++
+    ret ++
+
+    label func_list_get ++
+    movq (ind rdi) !%r10 ++
+    cmpq (imm 4) !%r10 ++
+    jne "runtime_error" ++
+    movq (ind rsi) !%r10 ++
+    cmpq (imm 2) !%r10 ++
+    jne "runtime_error" ++
+    movq (ind ~ofs:(byte) rsi) !%r8 ++ (* index *)
+    movq (ind ~ofs:(byte) rdi) !%r9 ++ (* len *)
+    cmpl !%r8d !%r9d ++
+    jle "runtime_error" ++
+    addq (imm 2) !%r8 ++
+    imulq (imm byte) !%r8 ++
+    addq !%r8 !%rdi ++
+    movq (ind rdi) !%rax ++
     ret ++
     
     label runtime_error ++
